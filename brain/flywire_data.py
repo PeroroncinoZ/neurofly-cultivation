@@ -76,3 +76,29 @@ def load_connections(path):
                 raise ValueError(f"{path}, line {line}: synapse_count must not be negative")
             connections.append(row)
     return connections
+
+
+def get_internal_connections(neurons, connections):
+    """Return connections whose two endpoints are in the loaded neurons."""
+    neuron_ids = {neuron["root_id"] for neuron in neurons}
+    return [
+        connection for connection in connections
+        if connection["pre_root_id"] in neuron_ids
+        and connection["post_root_id"] in neuron_ids
+    ]
+
+
+def filter_connections_by_synapse_count(connections, minimum):
+    """Return connections with at least minimum synapses."""
+    return [
+        connection for connection in connections
+        if connection["synapse_count"] >= minimum
+    ]
+
+
+def get_neuron_by_root_id(neurons, root_id):
+    """Return metadata for an integer root ID, or None if it is absent."""
+    for neuron in neurons:
+        if neuron["root_id"] == root_id:
+            return neuron
+    return None
