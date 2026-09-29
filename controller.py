@@ -10,6 +10,13 @@ SEARCH_MIN_SECONDS = 0.5
 SEARCH_MAX_SECONDS = 1.5
 SEARCH_MAX_TURN_RATE = 1.5
 SEARCH_SMOOTHING_SECONDS = 0.35
+ODOR_TREND_SECONDS = 0.3
+ODOR_TREND_FULL_SCALE = 0.3  # Odor units/second for full modulation.
+INCREASING_TURN_SCALE = 0.4
+DECREASING_TURN_SCALE = 2.0
+SLOW_ODOR_START = 0.65
+SLOW_ODOR_FULL = 0.95
+MIN_SPEED_SCALE = 0.3  # 90 px/s at the default 300 px/s cruising speed.
 
 
 class Controller:
@@ -22,12 +29,40 @@ class Controller:
         self.search_target = 0.0
         self.search_until = 0.0
         self.previous_time = None
+        self.previous_odor = None
+        self.total_odor = 0.0
+        self.smoothed_odor_change = 0.0
+        self.speed_scale = 1.0
 
     def choose_turn_rate(self, odor_input, left_output, right_output, now):
         """Return radians/second; no position or odor gradient enters steering."""
         elapsed = 0.0 if self.previous_time is None else max(0.0, now - self.previous_time)
         self.previous_time = now
-        neural_turn = self.motor_decoder.decode(left_output, right_output, elapsed)
+        self.total_odor = odor_input
+        if self.previous_odor is not None and elapsed > 0:
+            change = (odor_input - self.previous_odor) / elapsed
+            blend = -math.expm1(-elapsed / ODOR_TREND_SECONDS)
+            self.smoothed_odor_change += blend * (change - self.smoothed_odor_change)
+        self.previous_odor = odor_input
+        turn_scale = 1.0
+        self.speed_scale = 1.0
+        if odor_input >= self.odor_threshold:
+            trend = max(-1.0, min(1.0,
+                self.smoothed_odor_change / ODOR_TREND_FULL_SCALE))
+            if trend >= 0:
+                turn_scale = 1.0 + trend * (INCREASING_TURN_SCALE - 1.0)
+            else:
+                turn_scale = 1.0 - trend * (DECREASING_TURN_SCALE - 1.0)
+            strength = max(0.0, min(1.0,
+                (odor_input - SLOW_ODOR_START) / (SLOW_ODOR_FULL - SLOW_ODOR_START)))
+            strength = strength * strength * (3.0 - 2.0 * strength)
+            self.speed_scale = 1.0 - strength * (1.0 - MIN_SPEED_SCALE)
+        else:
+            # Do not carry an old trend through a scent-free search interval.
+            self.smoothed_odor_change = 0.0
+        neural_turn = self.motor_decoder.decode(
+            left_output, right_output, elapsed, odor_intensity=odor_input, gain_scale=turn_scale
+        )
         if odor_input >= self.odor_threshold:
             self.mode = "NEURAL FOLLOWING"
             self.search_until = 0.0

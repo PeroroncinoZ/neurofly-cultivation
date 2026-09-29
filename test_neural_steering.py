@@ -12,6 +12,7 @@ import random
 
 from brain.brain_interface import BrainInterface
 from controller import Controller
+from collision import movement_touches_fruit
 from fly import Fly
 from senses import sense_fruit
 from spiritual_fruit import SpiritualFruit
@@ -74,10 +75,10 @@ def run_scenario(name, fruit_position):
             following_frames += controller.mode == "NEURAL FOLLOWING"
             for key in totals:
                 totals[key] += activity[key]
-            fly.move(turn_rate, 1 / FPS)
+            start = (fly.x, fly.y)
+            fly.move(turn_rate, 1 / FPS, controller.speed_scale)
+            reached |= movement_touches_fruit(start, (fly.x, fly.y), fly.radius, fruit)
             boundary_frames += any(fly.keep_inside(*WINDOW_SIZE))
-            distance, _ = evaluation_metrics(fly, fruit)
-            reached |= distance <= fly.radius + fruit.radius
     finally:
         random.setstate(random_state)
 
@@ -98,7 +99,7 @@ def run_scenario(name, fruit_position):
 def main():
     print(f"Neural steering: {SECONDS}s/trial, {FPS} Hz, seed {SEED}")
     print(f"Start {START_POSITION}, heading {math.degrees(INITIAL_HEADING):.0f} deg; "
-          f"window {WINDOW_SIZE}; default speed and sensor noise preserved.")
+          f"window {WINDOW_SIZE}; odor-dependent speed; default sensor noise preserved.")
     print("Heading errors are absolute (0 deg = facing fruit). "
           "Means cover the full trial; success = any fruit contact.")
     results = []

@@ -5,14 +5,10 @@ import pygame
 
 from brain.brain_interface import BrainInterface
 from controller import Controller
+from collision import movement_touches_fruit
 from fly import Fly
 from senses import sense_fruit
 from spiritual_fruit import SpiritualFruit
-
-
-def circles_touch(first, second):
-    distance = math.hypot(first.x - second.x, first.y - second.y)
-    return distance <= first.radius + second.radius
 
 
 def spawn_fruit(width, height):
@@ -53,10 +49,12 @@ def main():
             brain_debug["odor_input"], brain_debug["dna02_left"],
             brain_debug["dna02_right"], simulation_time,
         )
-        fly.move(turn_rate, elapsed)
+        start = (fly.x, fly.y)
+        fly.move(turn_rate, elapsed, controller.speed_scale)
+        captured = movement_touches_fruit(start, (fly.x, fly.y), fly.radius, fruit)
         fly.keep_inside(screen.get_width(), screen.get_height())
 
-        if circles_touch(fly, fruit):
+        if captured:
             fly.qi += 1
             # Replacing the old fruit removes it from the world.
             fruit = spawn_fruit(screen.get_width(), screen.get_height())
@@ -68,6 +66,8 @@ def main():
         debug_lines = [
             f"Qi: {fly.qi}",
             f"Mode: {controller.mode}",
+            f"Total odor: {controller.total_odor:.3f}",
+            f"Smoothed odor change: {controller.smoothed_odor_change:+.3f}/s",
             f"Heading: {math.degrees(fly.heading):.1f} deg",
             f"Left odor input: {brain_debug['left_odor_input']:.3f}",
             f"Right odor input: {brain_debug['right_odor_input']:.3f}",
@@ -77,9 +77,11 @@ def main():
             f"MBON32 L/R: {brain_debug['mbon32_left']:.3f} / {brain_debug['mbon32_right']:.3f}",
             f"DNa02 left: {brain_debug['dna02_left']:.4f}",
             f"DNa02 right: {brain_debug['dna02_right']:.4f}",
-            f"Raw DNa02 difference (R - L): {brain_debug['dna02_difference']:+.4f}",
+            f"Raw DNa02 difference (L - R): {controller.motor_decoder.steering_difference:+.4f}",
+            f"Smoothed DNa02 difference (L - R): {controller.motor_decoder.smoothed_difference:+.5f}",
+            f"Applied steering gain: {controller.motor_decoder.applied_gain:.1f}",
             f"Applied turn rate: {turn_rate:+.3f} rad/s",
-            f"Forward speed: {fly.speed:.1f} px/s",
+            f"Applied forward speed: {fly.applied_speed:.1f} px/s",
             f"Position: ({fly.x:.3f}, {fly.y:.3f})",
         ]
         for index, line in enumerate(debug_lines):
