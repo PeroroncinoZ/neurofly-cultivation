@@ -1,8 +1,4 @@
-"""Load local, filtered connectome CSV files using the project's schema.
-
-These loaders do not download data or control the fly. Exported column names
-must match the schema below before loading; no biological values are inferred.
-"""
+"""Load local FlyWire CSV exports without downloading data or controlling the fly."""
 
 import csv
 
@@ -31,44 +27,52 @@ def _read_rows(path, required_columns):
 
 def load_neurons(path):
     """Return neuron records from a local CSV as a list of dictionaries."""
-    # Required: neuron_id.
-    # Optional text: cell_type, annotations, neurotransmitter_type.
-    # IDs stay strings to preserve large identifiers exactly.
+    # Require root_id and preserve every other metadata column as text.
     neurons = []
     seen_ids = set()
-    for line, row in _read_rows(path, ("neuron_id",)):
-        neuron_id = row["neuron_id"]
-        if neuron_id in seen_ids:
-            raise ValueError(f"{path}, line {line}: duplicate neuron_id {neuron_id}")
-        seen_ids.add(neuron_id)
-        neurons.append({
-            "neuron_id": neuron_id,
-            "cell_type": row.get("cell_type") or None,
-            "annotations": row.get("annotations") or None,
-            "neurotransmitter_type": row.get("neurotransmitter_type") or None,
-        })
+    for line, row in _read_rows(path, ("root_id",)):
+        # Convert directly to int, never float, to preserve large IDs exactly.
+        try:
+            root_id = int(row["root_id"])
+        except ValueError:
+            raise ValueError(f"{path}, line {line}: root_id must be an integer") from None
+        if root_id in seen_ids:
+            raise ValueError(f"{path}, line {line}: duplicate root_id {root_id}")
+        seen_ids.add(root_id)
+        row["root_id"] = root_id
+        neurons.append(row)
     return neurons
 
 
 def load_connections(path):
-    """Return directed connection records from a local CSV."""
-    # Required: presynaptic_neuron_id, postsynaptic_neuron_id, synapse_count.
-    # Optional: neurotransmitter_type, only if the export supplies it.
-    required = ("presynaptic_neuron_id", "postsynaptic_neuron_id", "synapse_count")
+    """Read five connection columns in their export order, without a header."""
+    columns = ("pre_root_id", "post_root_id", "neuropil", "synapse_count", "nt_type")
+    export_header = ("From", "To", "Neuropil", "Synapses", "Neuro Transmitter")
     connections = []
-    for line, row in _read_rows(path, required):
-        try:
-            count = int(row["synapse_count"])
-        except ValueError:
-            raise ValueError(
-                f"{path}, line {line}: synapse_count must be a nonnegative integer"
-            ) from None
-        if count < 0:
-            raise ValueError(f"{path}, line {line}: synapse_count must not be negative")
-        connections.append({
-            "presynaptic_neuron_id": row["presynaptic_neuron_id"],
-            "postsynaptic_neuron_id": row["postsynaptic_neuron_id"],
-            "synapse_count": count,
-            "neurotransmitter_type": row.get("neurotransmitter_type") or None,
-        })
+    first_row = True
+    with open(path, newline="", encoding="utf-8-sig") as csv_file:
+        reader = csv.reader(csv_file)
+        for values in reader:
+            if not values:
+                continue
+            values = [value.strip() for value in values]
+            # Also accept the known header present in the current local file.
+            if first_row:
+                first_row = False
+                if tuple(values) in (export_header, columns):
+                    continue
+            line = reader.line_num
+            if len(values) != len(columns):
+                raise ValueError(f"{path}, line {line}: expected five CSV fields")
+            row = dict(zip(columns, values))
+            for column in ("pre_root_id", "post_root_id", "synapse_count"):
+                try:
+                    row[column] = int(row[column])
+                except ValueError:
+                    raise ValueError(
+                        f"{path}, line {line}: {column} must be an integer"
+                    ) from None
+            if row["synapse_count"] < 0:
+                raise ValueError(f"{path}, line {line}: synapse_count must not be negative")
+            connections.append(row)
     return connections
