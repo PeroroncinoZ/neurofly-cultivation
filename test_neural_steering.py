@@ -77,7 +77,8 @@ def run_scenario(name, fruit_position):
             following_frames += controller.mode == "NEURAL FOLLOWING"
             for key in totals:
                 totals[key] += activity[key]
-            turn_rate = boundary.apply(fly, *WINDOW_SIZE, turn_rate, 1 / FPS)
+            turn_rate = boundary.apply(fly, *WINDOW_SIZE, turn_rate, 1 / FPS,
+                                       controller.total_odor, fly.speed * controller.speed_scale)
             start = (fly.x, fly.y)
             fly.move(turn_rate, 1 / FPS, controller.speed_scale)
             boundary_frames += any(fly.keep_inside(*WINDOW_SIZE))

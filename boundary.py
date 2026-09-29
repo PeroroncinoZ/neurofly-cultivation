@@ -1,10 +1,15 @@
-"""Deterministic wall avoidance; receives body geometry, never odor or fruit."""
+"""Deterministic wall avoidance; uses geometry and scalar sensory state, never fruit position."""
 import math
 
 BOUNDARY_MARGIN = 100.0
 BOUNDARY_TURN_GAIN = 3.0
 MAX_TURN_RATE = 3.0
 TURN_SMOOTHING_SECONDS = 0.12
+HIGH_ODOR_START = 0.75
+HIGH_ODOR_FULL = 0.95
+SLOW_SPEED_THRESHOLD = 120.0
+NEAR_SOURCE_MIN_STRENGTH = 0.1
+INWARD_HEADING_CLEARANCE = 0.25  # Finish turning slightly inward past wall-parallel.
 
 
 class BoundaryAvoidance:
@@ -18,18 +23,27 @@ class BoundaryAvoidance:
         self.smoothing_seconds = smoothing_seconds
         self.turn_rate = 0.0
         self.active = False
+        self.releasing = False
 
-    def apply(self, fly, width, height, requested_turn, elapsed):
+    def apply(self, fly, width, height, requested_turn, elapsed, total_odor=0.0, forward_speed=None):
         def pressure(distance):
             value = max(0.0, min(1.0, 1 - distance / self.margin))
             return value * value * (3 - 2 * value)
 
-        left = pressure(fly.x - fly.radius)
-        right = pressure(width - fly.radius - fly.x)
-        top = pressure(fly.y - fly.radius)
-        bottom = pressure(height - fly.radius - fly.y)
+        # Only walls the fly is moving toward need to change its heading.
+        forward_x, forward_y = math.cos(fly.heading), math.sin(fly.heading)
+        left = pressure(fly.x - fly.radius) * max(0.0, min(1.0, (-forward_x + INWARD_HEADING_CLEARANCE) / INWARD_HEADING_CLEARANCE))
+        right = pressure(width - fly.radius - fly.x) * max(0.0, min(1.0, (forward_x + INWARD_HEADING_CLEARANCE) / INWARD_HEADING_CLEARANCE))
+        top = pressure(fly.y - fly.radius) * max(0.0, min(1.0, (-forward_y + INWARD_HEADING_CLEARANCE) / INWARD_HEADING_CLEARANCE))
+        bottom = pressure(height - fly.radius - fly.y) * max(0.0, min(1.0, (forward_y + INWARD_HEADING_CLEARANCE) / INWARD_HEADING_CLEARANCE))
         strength = max(left, right, top, bottom)
-        self.active = strength > 0
+        speed = fly.applied_speed if forward_speed is None else forward_speed
+        high_odor = max(0.0, min(1.0,
+            (total_odor - HIGH_ODOR_START) / (HIGH_ODOR_FULL - HIGH_ODOR_START)))
+        slow = max(0.0, min(1.0, 1 - speed / SLOW_SPEED_THRESHOLD))
+        strength *= 1 - high_odor * slow * (1 - NEAR_SOURCE_MIN_STRENGTH)
+        # Position clamping remains the hard safety constraint, even at rest.
+        self.active = strength > 1e-9
         inward_x, inward_y = left - right, top - bottom
         target = requested_turn
         if inward_x or inward_y:
@@ -41,10 +55,11 @@ class BoundaryAvoidance:
             wall_turn = max(-self.max_turn_rate, min(self.max_turn_rate,
                                                     self.turn_gain * error))
             target = (1 - strength) * requested_turn + strength * wall_turn
-        if self.active:
+        if self.active or self.releasing:
             blend = -math.expm1(-max(0.0, elapsed) / self.smoothing_seconds)
             self.turn_rate += blend * (target - self.turn_rate)
         else:
             self.turn_rate = requested_turn
+        self.releasing = self.active or abs(self.turn_rate - requested_turn) > 1e-4
         self.turn_rate = max(-self.max_turn_rate, min(self.max_turn_rate, self.turn_rate))
         return self.turn_rate

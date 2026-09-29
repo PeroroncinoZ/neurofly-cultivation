@@ -54,7 +54,7 @@ class TemporalNavigationTests(unittest.TestCase):
         self.assertEqual(controller.smoothed_odor_change, 0)
 
     def test_swept_capture_crossing_tangent_miss_and_stationary(self):
-        fruit = SimpleNamespace(x=100, y=100, radius=12)
+        fruit = SimpleNamespace(x=100, y=100, radius=12, capture_radius=22)
         self.assertTrue(movement_touches_fruit((0, 100), (200, 100), 10, fruit))
         self.assertTrue(movement_touches_fruit((0, 122), (200, 122), 10, fruit))
         self.assertFalse(movement_touches_fruit((0, 123), (200, 123), 10, fruit))

@@ -9,14 +9,16 @@ from boundary import BoundaryAvoidance
 from collision import movement_touches_fruit
 from fly import Fly
 from senses import sense_fruit
-from spiritual_fruit import SpiritualFruit
+from spiritual_fruit import SpiritualFruit, SPAWN_MARGIN
 
 
-def spawn_fruit(width, height):
+def spawn_fruit(width, height, margin=SPAWN_MARGIN):
     fruit = SpiritualFruit(0, 0)
-    # Keep the whole fruit inside the window.
-    fruit.x = random.randint(fruit.radius, width - fruit.radius)
-    fruit.y = random.randint(fruit.radius, height - fruit.radius)
+    inset = math.ceil(max(fruit.radius, margin))
+    if width < 2 * inset or height < 2 * inset:
+        raise ValueError("window is too small for the fruit spawn margin")
+    fruit.x = random.randint(inset, width - inset)
+    fruit.y = random.randint(inset, height - inset)
     return fruit
 
 
@@ -52,7 +54,8 @@ def main():
             brain_debug["dna02_right"], simulation_time,
         )
         turn_rate = boundary.apply(fly, screen.get_width(), screen.get_height(),
-                                   turn_rate, elapsed)
+                                   turn_rate, elapsed, controller.total_odor,
+                                   fly.speed * controller.speed_scale)
         start = (fly.x, fly.y)
         fly.move(turn_rate, elapsed, controller.speed_scale)
         fly.keep_inside(screen.get_width(), screen.get_height())
