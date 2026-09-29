@@ -12,6 +12,7 @@ import random
 
 from brain.brain_interface import BrainInterface
 from controller import Controller
+from boundary import BoundaryAvoidance
 from collision import movement_touches_fruit
 from fly import Fly
 from senses import sense_fruit
@@ -48,6 +49,7 @@ def run_scenario(name, fruit_position):
     fruit = SpiritualFruit(*fruit_position)
     brain = BrainInterface()
     controller = Controller(rng=random.Random(SEED))
+    boundary = BoundaryAvoidance()
     start_distance, start_error = evaluation_metrics(fly, fruit)
     totals = dict.fromkeys(
         ("left_odor_input", "right_odor_input", "dna02_left", "dna02_right"), 0.0
@@ -75,10 +77,11 @@ def run_scenario(name, fruit_position):
             following_frames += controller.mode == "NEURAL FOLLOWING"
             for key in totals:
                 totals[key] += activity[key]
+            turn_rate = boundary.apply(fly, *WINDOW_SIZE, turn_rate, 1 / FPS)
             start = (fly.x, fly.y)
             fly.move(turn_rate, 1 / FPS, controller.speed_scale)
-            reached |= movement_touches_fruit(start, (fly.x, fly.y), fly.radius, fruit)
             boundary_frames += any(fly.keep_inside(*WINDOW_SIZE))
+            reached |= movement_touches_fruit(start, (fly.x, fly.y), fly.radius, fruit)
     finally:
         random.setstate(random_state)
 

@@ -27,12 +27,7 @@ class Fly:
         hit_y = self.y < self.radius or self.y > height - self.radius
         self.x = float(max(self.radius, min(self.x, width - self.radius)))
         self.y = float(max(self.radius, min(self.y, height - self.radius)))
-        # Mechanical wall response changes body heading independently of the brain.
-        if hit_x:
-            self.heading = math.pi - self.heading
-        if hit_y:
-            self.heading = -self.heading
-        self.heading %= math.tau
+        # Position constraint only: heading is controlled by smooth wall avoidance.
         return hit_x, hit_y
 
     def draw(self, screen):

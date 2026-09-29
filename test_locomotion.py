@@ -22,14 +22,12 @@ class LocomotionTests(unittest.TestCase):
         self.assertAlmostEqual(fly.x, 106.25)
         self.assertIsInstance(fly.x, float)
 
-    def test_wall_reflects_heading_and_clamps_body(self):
+    def test_wall_clamps_body_without_changing_heading(self):
         fly = Fly(789, 300, speed=100)
         fly.move(0, 0.1)
         self.assertEqual(fly.keep_inside(800, 600), (True, False))
         self.assertEqual(fly.x, 790.0)
-        self.assertAlmostEqual(fly.heading, math.pi)
-        fly.move(0, 0.1)
-        self.assertLess(fly.x, 790)
+        self.assertAlmostEqual(fly.heading, 0)
 
     def test_crossed_dna02_output_turns_body_in_expected_direction(self):
         # Facing up: anatomical right is increasing screen x.

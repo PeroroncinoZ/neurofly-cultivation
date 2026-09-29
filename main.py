@@ -5,6 +5,7 @@ import pygame
 
 from brain.brain_interface import BrainInterface
 from controller import Controller
+from boundary import BoundaryAvoidance
 from collision import movement_touches_fruit
 from fly import Fly
 from senses import sense_fruit
@@ -28,6 +29,7 @@ def main():
     font = pygame.font.Font(None, 26)
     fly = Fly(400, 300)
     controller = Controller()
+    boundary = BoundaryAvoidance()
     fruit = SpiritualFruit(600, 200)
 
     simulation_time = 0.0
@@ -49,10 +51,12 @@ def main():
             brain_debug["odor_input"], brain_debug["dna02_left"],
             brain_debug["dna02_right"], simulation_time,
         )
+        turn_rate = boundary.apply(fly, screen.get_width(), screen.get_height(),
+                                   turn_rate, elapsed)
         start = (fly.x, fly.y)
         fly.move(turn_rate, elapsed, controller.speed_scale)
-        captured = movement_touches_fruit(start, (fly.x, fly.y), fly.radius, fruit)
         fly.keep_inside(screen.get_width(), screen.get_height())
+        captured = movement_touches_fruit(start, (fly.x, fly.y), fly.radius, fruit)
 
         if captured:
             fly.qi += 1
@@ -68,6 +72,7 @@ def main():
             f"Mode: {controller.mode}",
             f"Total odor: {controller.total_odor:.3f}",
             f"Smoothed odor change: {controller.smoothed_odor_change:+.3f}/s",
+            f"Boundary avoidance: {boundary.active}",
             f"Heading: {math.degrees(fly.heading):.1f} deg",
             f"Left odor input: {brain_debug['left_odor_input']:.3f}",
             f"Right odor input: {brain_debug['right_odor_input']:.3f}",
@@ -86,7 +91,7 @@ def main():
         ]
         for index, line in enumerate(debug_lines):
             text = font.render(line, True, (255, 255, 255))
-            screen.blit(text, (10, 10 + index * 28))
+            screen.blit(text, (10, 10 + index * 26))
         pygame.display.flip()
 
     pygame.quit()
