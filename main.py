@@ -57,7 +57,7 @@ def main():
                                    turn_rate, elapsed, controller.total_odor,
                                    fly.speed * controller.speed_scale)
         start = (fly.x, fly.y)
-        fly.move(turn_rate, elapsed, controller.speed_scale)
+        fly.move(turn_rate, elapsed, controller.speed_scale * boundary.speed_scale)
         fly.keep_inside(screen.get_width(), screen.get_height())
         captured = movement_touches_fruit(start, (fly.x, fly.y), fly.radius, fruit)
 
@@ -73,6 +73,7 @@ def main():
         debug_lines = [
             f"Qi: {fly.qi}",
             f"Mode: {controller.mode}",
+            f"Alignment threshold: {controller.alignment_threshold:.4f}",
             f"Total odor: {controller.total_odor:.3f}",
             f"Smoothed odor change: {controller.smoothed_odor_change:+.3f}/s",
             f"Boundary avoidance: {boundary.active}",
@@ -94,7 +95,7 @@ def main():
         ]
         for index, line in enumerate(debug_lines):
             text = font.render(line, True, (255, 255, 255))
-            screen.blit(text, (10, 10 + index * 26))
+            screen.blit(text, (10, 10 + index * 24))
         pygame.display.flip()
 
     pygame.quit()

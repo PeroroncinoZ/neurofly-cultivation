@@ -14,10 +14,7 @@ ODOR_TREND_SECONDS = 0.3
 ODOR_TREND_FULL_SCALE = 0.3  # Odor units/second for full modulation.
 INCREASING_TURN_SCALE = 0.4
 DECREASING_TURN_SCALE = 2.0
-SLOW_ODOR_START = 0.65
-SLOW_ODOR_FULL = 0.95
 APPROACH_SPEED_SCALE = 0.6
-MIN_SPEED_SCALE = 0.1
 FEEDING_ODOR_THRESHOLD = 0.90
 FEEDING_EXIT_THRESHOLD = 0.85
 FEEDING_STABLE_CHANGE = 0.05  # Odor units/second.
@@ -26,6 +23,13 @@ FEEDING_DURATION_SECONDS = 1.0
 FEEDING_COOLDOWN_SECONDS = 1.0
 FEEDING_SPEED_SCALE = 0.0
 FEEDING_TURN_SCALE = 0.15
+ALIGNMENT_ODOR_ENTER = 0.70
+ALIGNMENT_CONFIRM_SECONDS = 0.25
+ALIGNMENT_EXIT_THRESHOLD = 0.002
+ALIGNMENT_THRESHOLD = 0.003  # About 0.25 rad/s after the decoder deadband.
+ALIGNING_SPEED_SCALE = 0.0
+ALIGNED_SPEED_SCALE = 0.1  # 30 px/s at the default 300 px/s base speed.
+
 
 
 class Controller:
@@ -41,6 +45,9 @@ class Controller:
         self.high_stable_since = None
         self.feeding_until = None
         self.feeding_cooldown_until = 0.0
+        self.alignment_threshold = ALIGNMENT_THRESHOLD
+        self.alignment_regime = False
+        self.aligned_since = None
         self.previous_odor = None
         self.total_odor = 0.0
         self.smoothed_odor_change = 0.0
@@ -56,6 +63,13 @@ class Controller:
             blend = -math.expm1(-elapsed / ODOR_TREND_SECONDS)
             self.smoothed_odor_change += blend * (change - self.smoothed_odor_change)
         self.previous_odor = odor_input
+        # Schmitt trigger: retain alignment control through small odor dips.
+        if odor_input < self.odor_threshold:
+            self.alignment_regime = False
+            self.aligned_since = None
+        elif odor_input >= ALIGNMENT_ODOR_ENTER:
+            self.alignment_regime = True
+        near = self.alignment_regime
         stable_high = (odor_input >= FEEDING_ODOR_THRESHOLD
                        and abs(self.smoothed_odor_change) <= FEEDING_STABLE_CHANGE)
         if self.feeding_until is not None:
@@ -80,21 +94,47 @@ class Controller:
                 turn_scale = 1.0 + trend * (INCREASING_TURN_SCALE - 1.0)
             else:
                 turn_scale = 1.0 - trend * (DECREASING_TURN_SCALE - 1.0)
-            strength = max(0.0, min(1.0,
-                (odor_input - SLOW_ODOR_START) / (SLOW_ODOR_FULL - SLOW_ODOR_START)))
-            strength = strength * strength * (3.0 - 2.0 * strength)
-            self.speed_scale = APPROACH_SPEED_SCALE - strength * (APPROACH_SPEED_SCALE - MIN_SPEED_SCALE)
+            self.speed_scale = APPROACH_SPEED_SCALE
         else:
             # Do not carry an old trend through a scent-free search interval.
             self.smoothed_odor_change = 0.0
+        # Strong odor changes translation, not neural steering responsiveness.
+        if near:
+            turn_scale = 1.0
         if self.feeding_until is not None:
             self.speed_scale = FEEDING_SPEED_SCALE
             turn_scale *= FEEDING_TURN_SCALE
         neural_turn = self.motor_decoder.decode(
             left_output, right_output, elapsed, odor_intensity=odor_input, gain_scale=turn_scale
         )
+        # Neural misalignment can latch the regime at any detectable odor.
+        if (odor_input >= self.odor_threshold
+                and abs(self.motor_decoder.smoothed_difference) >= self.alignment_threshold):
+            self.alignment_regime = True
+        near = self.alignment_regime
         if odor_input >= self.odor_threshold:
-            self.mode = "FEEDING" if self.feeding_until is not None else "NEURAL FOLLOWING"
+            if self.feeding_until is not None:
+                self.mode = "FEEDING"
+                self.aligned_since = None
+            elif near:
+                # Use the freshly filtered neural signal, never an odor gradient.
+                magnitude = abs(self.motor_decoder.smoothed_difference)
+                if magnitude >= self.alignment_threshold:
+                    self.aligned_since = None
+                    self.mode = "ALIGNING"
+                elif self.mode == "ALIGNING" and magnitude > ALIGNMENT_EXIT_THRESHOLD:
+                    self.aligned_since = None
+                elif self.mode == "ALIGNING":
+                    if self.aligned_since is None:
+                        self.aligned_since = now
+                    if now - self.aligned_since >= ALIGNMENT_CONFIRM_SECONDS:
+                        self.mode = "APPROACHING"
+                else:
+                    self.mode = "APPROACHING"
+                self.speed_scale = (ALIGNING_SPEED_SCALE if self.mode == "ALIGNING"
+                                    else ALIGNED_SPEED_SCALE)
+            else:
+                self.mode = "NEURAL_FOLLOWING"
             self.search_until = 0.0
             self.turn_rate = neural_turn
             return self.turn_rate

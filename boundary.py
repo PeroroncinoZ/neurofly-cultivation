@@ -1,5 +1,10 @@
 """Deterministic wall avoidance; uses geometry and scalar sensory state, never fruit position."""
 import math
+import logging
+
+logger = logging.getLogger(__name__)
+BOUNDARY_ODOR_THRESHOLD = 0.03
+BOUNDARY_SLOW_DISTANCE = 30.0
 
 BOUNDARY_MARGIN = 100.0
 BOUNDARY_TURN_GAIN = 3.0
@@ -24,8 +29,34 @@ class BoundaryAvoidance:
         self.turn_rate = 0.0
         self.active = False
         self.releasing = False
+        self.speed_scale = 1.0
+        self.turn_modifications = 0
+        self.turn_sign_changes = 0
 
     def apply(self, fly, width, height, requested_turn, elapsed, total_odor=0.0, forward_speed=None):
+        self.speed_scale = 1.0
+        speed = fly.applied_speed if forward_speed is None else forward_speed
+        if total_odor >= BOUNDARY_ODOR_THRESHOLD:
+            # Rotation in place is always safe for the circular body. Preserve
+            # neural sign (including zero); brake translation instead of steering.
+            heading = fly.heading + requested_turn * max(0.0, elapsed)
+            direction_x, direction_y = math.cos(heading), math.sin(heading)
+            clearances = []
+            for position, direction, limit in ((fly.x, direction_x, width),
+                                                (fly.y, direction_y, height)):
+                if abs(direction) > 1e-12:
+                    clearance = (limit - fly.radius - position if direction > 0
+                                 else position - fly.radius)
+                    clearances.append(max(0.0, clearance) / abs(direction))
+            distance = min(clearances, default=float('inf'))
+            braking = max(0.0, min(1.0, distance / BOUNDARY_SLOW_DISTANCE))
+            safe_step = 1.0 if speed * elapsed <= 0 else min(1.0, distance / (speed * elapsed))
+            self.speed_scale = min(braking, safe_step)
+            self.active = self.speed_scale < 1.0
+            self.releasing = False
+            self.turn_rate = requested_turn
+            return self.turn_rate
+
         def pressure(distance):
             value = max(0.0, min(1.0, 1 - distance / self.margin))
             return value * value * (3 - 2 * value)
@@ -62,4 +93,9 @@ class BoundaryAvoidance:
             self.turn_rate = requested_turn
         self.releasing = self.active or abs(self.turn_rate - requested_turn) > 1e-4
         self.turn_rate = max(-self.max_turn_rate, min(self.max_turn_rate, self.turn_rate))
+        if not math.isclose(self.turn_rate, requested_turn, abs_tol=1e-12):
+            self.turn_modifications += 1
+            self.turn_sign_changes += self.turn_rate * requested_turn < 0
+            logger.info("Boundary turn modification: requested=%+.6f applied=%+.6f odor=%.4f",
+                        requested_turn, self.turn_rate, total_odor)
         return self.turn_rate

@@ -46,7 +46,7 @@ class TemporalNavigationTests(unittest.TestCase):
             speeds.append(fly.applied_speed)
             self.assertAlmostEqual(fly.x - 400, fly.applied_speed * 0.1)
         self.assertEqual(speeds[0], 180)
-        self.assertTrue(speeds[0] > speeds[1] > speeds[2] > 0)
+        self.assertTrue(speeds[0] > speeds[1] == speeds[2] > 0)
         self.assertAlmostEqual(speeds[2], 30)
         controller.choose_turn_rate(0, 0, 0, 4)
         self.assertEqual(controller.mode, 'SEARCHING')

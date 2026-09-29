@@ -54,8 +54,13 @@ def run_scenario(name, fruit_position):
     totals = dict.fromkeys(
         ("left_odor_input", "right_odor_input", "dna02_left", "dna02_right"), 0.0
     )
+    odor_min, odor_max, difference_max = float("inf"), 0.0, 0.0
     reached = False
     following_frames = 0
+    state_frames = dict.fromkeys(
+        ('SEARCHING', 'NEURAL_FOLLOWING', 'ALIGNING', 'APPROACHING', 'FEEDING'), 0)
+    alignment_transitions = 0
+    previous_mode = controller.mode
     boundary_frames = 0
     steps = SECONDS * FPS
 
@@ -74,13 +79,20 @@ def run_scenario(name, fruit_position):
             )
             # Only neural activity and scalar odor detection enter the controller.
             # Its existing detected-odor branch never samples random search turns.
-            following_frames += controller.mode == "NEURAL FOLLOWING"
+            odor_min = min(odor_min, activity['odor_input'])
+            odor_max = max(odor_max, activity['odor_input'])
+            difference_max = max(difference_max, abs(activity['dna02_left'] - activity['dna02_right']))
+            state_frames[controller.mode] += 1
+            alignment_transitions += (previous_mode == 'ALIGNING'
+                                      and controller.mode == 'APPROACHING')
+            previous_mode = controller.mode
+            following_frames += controller.mode == "NEURAL_FOLLOWING"
             for key in totals:
                 totals[key] += activity[key]
             turn_rate = boundary.apply(fly, *WINDOW_SIZE, turn_rate, 1 / FPS,
                                        controller.total_odor, fly.speed * controller.speed_scale)
             start = (fly.x, fly.y)
-            fly.move(turn_rate, 1 / FPS, controller.speed_scale)
+            fly.move(turn_rate, 1 / FPS, controller.speed_scale * boundary.speed_scale)
             boundary_frames += any(fly.keep_inside(*WINDOW_SIZE))
             reached |= movement_touches_fruit(start, (fly.x, fly.y), fly.radius, fruit)
     finally:
@@ -89,6 +101,8 @@ def run_scenario(name, fruit_position):
     end_distance, end_error = evaluation_metrics(fly, fruit)
     return {
         "scenario": name,
+        "odor_min": odor_min, "odor_max": odor_max, "max_abs_dna02": difference_max,
+        "boundary_sign_changes": boundary.turn_sign_changes,
         "starting_distance": start_distance,
         "ending_distance": end_distance,
         "starting_heading_error": start_error,
@@ -97,6 +111,8 @@ def run_scenario(name, fruit_position):
         "reached_fruit": reached,
         "following_seconds": following_frames / FPS,
         "boundary_frames": boundary_frames,
+        "state_seconds": {key: frames / FPS for key, frames in state_frames.items()},
+        "alignment_transitions": alignment_transitions,
     }
 
 
@@ -121,6 +137,12 @@ def main():
               f"{result['mean_dna02_left']:.5f} / {result['mean_dna02_right']:.5f}")
         print(f"  Neural following: {result['following_seconds']:.2f}s; "
               f"wall-contact frames: {result['boundary_frames']}")
+        print(f"  Odor min/max: {result['odor_min']:.4f}/{result['odor_max']:.4f}; "
+              f"max abs DNa02: {result['max_abs_dna02']:.5f}; "
+              f"boundary sign changes: {result['boundary_sign_changes']}")
+        print("  State seconds: " + ", ".join(
+            f"{state}={seconds:.2f}" for state, seconds in result['state_seconds'].items()))
+        print(f"  ALIGNING -> APPROACHING: {result['alignment_transitions']}")
     successes = sum(result["reached_fruit"] for result in results)
     print(f"\nOverall success: {successes}/{len(results)} reached the fruit.")
 

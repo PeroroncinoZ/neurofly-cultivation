@@ -34,7 +34,7 @@ class BoundaryFeedingTests(unittest.TestCase):
         controller = Controller()
         controller.choose_turn_rate(0.94, 0.21, 0.2, 0)
         controller.choose_turn_rate(0.94, 0.21, 0.2, 0.3)
-        self.assertEqual(controller.mode, 'NEURAL FOLLOWING')
+        self.assertEqual(controller.mode, 'ALIGNING')
         controller.choose_turn_rate(0.94, 0.21, 0.2, 0.5)
         self.assertEqual(controller.mode, 'FEEDING')
         self.assertEqual(controller.speed_scale, 0)
@@ -50,11 +50,11 @@ class BoundaryFeedingTests(unittest.TestCase):
             controller.choose_turn_rate(0.94, 0, 0, now)
         self.assertEqual(controller.mode, 'FEEDING')
         controller.choose_turn_rate(0.94, 0, 0, 1.6)
-        self.assertEqual(controller.mode, 'NEURAL FOLLOWING')
+        self.assertEqual(controller.mode, 'APPROACHING')
         self.assertGreater(controller.speed_scale, 0)
 
     def test_rapidly_rising_odor_does_not_trigger_feeding(self):
         controller = Controller()
         for index in range(11):
             controller.choose_turn_rate(0.5 + 0.05 * index, 0, 0, index * 0.1)
-        self.assertEqual(controller.mode, 'NEURAL FOLLOWING')
+        self.assertEqual(controller.mode, 'APPROACHING')

@@ -30,7 +30,7 @@ def run_trial(position, start, heading):
             turn = boundary.apply(fly, 800, 600, turn, 1 / 60, controller.total_odor,
                                   fly.speed * controller.speed_scale)
             start = (fly.x, fly.y)
-            fly.move(turn, 1 / 60, controller.speed_scale)
+            fly.move(turn, 1 / 60, controller.speed_scale * boundary.speed_scale)
             fly.keep_inside(800, 600)
             inside &= 10 <= fly.x <= 790 and 10 <= fly.y <= 590
             consumed = movement_touches_fruit(start, (fly.x, fly.y), fly.radius, fruit)
@@ -60,15 +60,24 @@ class CaptureBoundaryTests(unittest.TestCase):
         self.assertFalse(movement_touches_fruit((300, 336), (500, 336), 10, fruit))
         self.assertTrue(movement_touches_fruit((400, 335), (400, 335), 10, fruit))
 
-    def test_high_odor_slow_motion_softens_wall_turn(self):
-        fly = Fly(770, 300)
-        normal = BoundaryAvoidance().apply(fly, 800, 600, 0, 0.1, 0.2, 30)
-        softened = BoundaryAvoidance().apply(fly, 800, 600, 0, 0.1, 0.95, 30)
-        self.assertTrue(0 < softened < normal)
-        fly.heading = math.pi
-        avoidance = BoundaryAvoidance()
-        self.assertEqual(avoidance.apply(fly, 800, 600, 0.2, 0.1), 0.2)
-        self.assertFalse(avoidance.active)
+    def test_detected_odor_brakes_without_modifying_neural_turn(self):
+        for heading in [0, math.pi / 4, math.pi]:
+            for turn in [-1.0, 0.0, 1.0]:
+                fly = Fly(789, 589, heading=heading)
+                avoidance = BoundaryAvoidance()
+                applied = avoidance.apply(fly, 800, 600, turn, 0.1, 0.4, 300)
+                self.assertEqual(applied, turn)
+                fly.move(applied, 0.1, avoidance.speed_scale)
+                # Containment must hold even before the final position clamp.
+                self.assertTrue(10 <= fly.x <= 790 and 10 <= fly.y <= 590)
+                self.assertEqual(avoidance.turn_sign_changes, 0)
+
+    def test_search_turn_modifications_are_logged(self):
+        with self.assertLogs('boundary', level='INFO') as logs:
+            avoidance = BoundaryAvoidance()
+            avoidance.apply(Fly(790, 300), 800, 600, 0, 0.1)
+        self.assertEqual(avoidance.turn_modifications, 1)
+        self.assertIn('requested=', logs.output[0])
 
     def test_spawn_margin(self):
         for _ in range(100):

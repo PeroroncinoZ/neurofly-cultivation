@@ -79,14 +79,14 @@ class LocomotionTests(unittest.TestCase):
             self.assertEqual(decoder.decode(0.2, 0.2 + (-1) ** index * 0.0004), 0)
         self.assertGreater(decoder.decode(0.203, 0.2, 1), 0)
 
-    def test_high_odor_reduces_gain_symmetrically(self):
+    def test_high_odor_preserves_gain_symmetrically(self):
         for left, right in [(0.2, 0.205), (0.205, 0.2)]:
             decoder = MotorDecoder()
             far = decoder.decode(left, right, 10, odor_intensity=0.75)
             self.assertEqual(decoder.applied_gain, 100)
             near = decoder.decode(left, right, 10, odor_intensity=0.95)
-            self.assertAlmostEqual(decoder.applied_gain, 35)
-            self.assertAlmostEqual(near, far * 0.35)
+            self.assertAlmostEqual(decoder.applied_gain, 100)
+            self.assertAlmostEqual(near, far)
             self.assertEqual(decoder.steering_difference, left - right)
 
     def test_detected_odor_immediately_follows_even_with_equal_activity(self):
@@ -95,7 +95,7 @@ class LocomotionTests(unittest.TestCase):
         controller.choose_turn_rate(0, 0, 0, 0.1)
         self.assertNotEqual(controller.turn_rate, 0)
         self.assertEqual(controller.choose_turn_rate(ODOR_THRESHOLD, 0.4, 0.4, 0.2), 0)
-        self.assertEqual(controller.mode, 'NEURAL FOLLOWING')
+        self.assertEqual(controller.mode, 'NEURAL_FOLLOWING')
         self.assertEqual(controller.choose_turn_rate(1, 0.4, 0.40001, 0.3), 0)
         controller.choose_turn_rate(0, 0.4, 0.4, 0.4)
         self.assertEqual(controller.mode, 'SEARCHING')
