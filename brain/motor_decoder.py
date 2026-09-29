@@ -1,31 +1,20 @@
-"""Simplified motor decoder reading connectome-derived neural activity.
-
-This is a game movement mapping, not a biologically complete motor circuit.
-LH activity sets a horizontal bias; vertical motion retains the last search
-direction (initially upward). No fruit position or sensory gradient is used.
-"""
-
-import math
-
+"""Map DNa02 activity asymmetry to angular velocity, in radians/second."""
 
 STEERING_GAIN = 8.0
-SMOOTHING_SECONDS = 0.25
+MAX_TURN_RATE = 3.0
 
 
 class MotorDecoder:
-    def __init__(self):
-        self.direction_x = 0.0
-        self.direction_y = -1.0
+    def __init__(self, steering_gain=STEERING_GAIN, max_turn_rate=MAX_TURN_RATE):
+        if steering_gain < 0 or max_turn_rate <= 0:
+            raise ValueError("gain must be nonnegative and maximum turn rate positive")
+        self.steering_gain = steering_gain
+        self.max_turn_rate = max_turn_rate
         self.steering_difference = 0.0
 
-    def set_search_direction(self, direction):
-        """Carry the most recent search movement into neural following."""
-        self.direction_x, self.direction_y = direction
-
-    def decode(self, left_activity, right_activity, elapsed_seconds):
+    def decode(self, left_activity, right_activity):
+        # Screen y increases downward: positive rotation turns right/clockwise.
         self.steering_difference = right_activity - left_activity
-        target_x = max(-1.0, min(1.0, STEERING_GAIN * self.steering_difference))
-        # Smooth velocity instead of choosing a new left/right sign each frame.
-        blend = 1.0 - math.exp(-max(0.0, elapsed_seconds) / SMOOTHING_SECONDS)
-        self.direction_x += blend * (target_x - self.direction_x)
-        return self.direction_x, self.direction_y
+        return max(-self.max_turn_rate, min(
+            self.max_turn_rate, self.steering_gain * self.steering_difference
+        ))

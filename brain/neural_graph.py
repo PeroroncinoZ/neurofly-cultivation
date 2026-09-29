@@ -23,8 +23,8 @@ MINIMUM_SYNAPSES = 5
 
 
 def build_neural_graph(
-    neuron_path=DATA_DIR / "neurofly_neurons.csv",
-    connection_path=DATA_DIR / "neurofly_connections.csv",
+    neuron_path=DATA_DIR / "neurofly_neurons_v3.csv",
+    connection_path=DATA_DIR / "neurofly_connections_v3.csv",
 ):
     """Load all selected neurons and internal connections with >= 5 synapses."""
     neurons = load_neurons(neuron_path)

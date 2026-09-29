@@ -9,8 +9,8 @@ from brain.flywire_data import (
 
 DATA_DIR = Path("brain/data")
 
-neurons = load_neurons(DATA_DIR / "neurofly_neurons.csv")
-connections = load_connections(DATA_DIR / "neurofly_connections.csv")
+neurons = load_neurons(DATA_DIR / "neurofly_neurons_v3.csv")
+connections = load_connections(DATA_DIR / "neurofly_connections_v3.csv")
 
 internal = get_internal_connections(neurons, connections)
 strong = filter_connections_by_synapse_count(internal, 5)

@@ -1,24 +1,41 @@
+import math
+
 import pygame
 
 
 class Fly:
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
+    def __init__(self, x, y, heading=0.0, speed=300.0):
+        self.x = float(x)
+        self.y = float(y)
+        self.heading = float(heading) % math.tau
         self.qi = 0
-        self.speed = 5
+        self.speed = float(speed)  # Pixels/second (formerly 5 pixels/frame at 60 Hz).
         self.radius = 10
         self.color = (255, 255, 255)
 
-    def move(self, direction_x, direction_y):
-        # The controller chooses directions; the body applies its speed.
-        self.x += direction_x * self.speed
-        self.y += direction_y * self.speed
+    def move(self, turn_rate, elapsed_seconds):
+        """Integrate angular velocity, then move forward along the body heading."""
+        elapsed_seconds = max(0.0, elapsed_seconds)
+        self.heading = (self.heading + turn_rate * elapsed_seconds) % math.tau
+        self.x += math.cos(self.heading) * self.speed * elapsed_seconds
+        self.y += math.sin(self.heading) * self.speed * elapsed_seconds
 
     def keep_inside(self, width, height):
-        # Leave enough room for the entire circle at each edge.
-        self.x = max(self.radius, min(self.x, width - self.radius))
-        self.y = max(self.radius, min(self.y, height - self.radius))
+        hit_x = self.x < self.radius or self.x > width - self.radius
+        hit_y = self.y < self.radius or self.y > height - self.radius
+        self.x = float(max(self.radius, min(self.x, width - self.radius)))
+        self.y = float(max(self.radius, min(self.y, height - self.radius)))
+        # Mechanical wall response changes body heading independently of the brain.
+        if hit_x:
+            self.heading = math.pi - self.heading
+        if hit_y:
+            self.heading = -self.heading
+        self.heading %= math.tau
+        return hit_x, hit_y
 
     def draw(self, screen):
-        pygame.draw.circle(screen, self.color, (self.x, self.y), self.radius)
+        center = (round(self.x), round(self.y))
+        pygame.draw.circle(screen, self.color, center, self.radius)
+        nose = (round(self.x + self.radius * math.cos(self.heading)),
+                round(self.y + self.radius * math.sin(self.heading)))
+        pygame.draw.line(screen, (50, 180, 255), center, nose, 3)
