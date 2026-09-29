@@ -1,6 +1,7 @@
 import pygame
 
 from fly import Fly
+from spiritual_fruit import SpiritualFruit
 
 
 def main():
@@ -9,6 +10,7 @@ def main():
     pygame.display.set_caption("NeuroFly: Cultivation")
     clock = pygame.time.Clock()
     fly = Fly(400, 300)
+    fruit = SpiritualFruit(600, 200)
 
     running = True
     while running:
@@ -22,8 +24,9 @@ def main():
         keys = pygame.key.get_pressed()
         fly.move(keys)
 
-        # Clear the previous frame before drawing the fly again.
+        # Clear the previous frame before drawing the fruit and fly again.
         screen.fill((30, 30, 30))
+        fruit.draw(screen)
         fly.draw(screen)
         pygame.display.flip()
         clock.tick(60)
