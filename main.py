@@ -4,6 +4,7 @@ import random
 import pygame
 
 from fly import Fly
+from senses import sense_fruit
 from spiritual_fruit import SpiritualFruit
 
 
@@ -46,12 +47,22 @@ def main():
             # Replacing the old fruit removes it from the world.
             fruit = spawn_fruit(screen.get_width(), screen.get_height())
 
+        # Sense after collection so the values describe the current fruit.
+        senses = sense_fruit(fly, fruit)
+
         # Clear the previous frame before drawing the fruit and fly again.
         screen.fill((30, 30, 30))
         fruit.draw(screen)
         fly.draw(screen)
-        qi_text = font.render(f"Qi: {fly.qi}", True, (255, 255, 255))
-        screen.blit(qi_text, (10, 10))
+        debug_lines = [
+            f"Qi: {fly.qi}",
+            f"Fruit dx: {senses['dx']:.1f} px",
+            f"Fruit dy: {senses['dy']:.1f} px",
+            f"Fruit distance: {senses['distance']:.1f} px",
+        ]
+        for index, line in enumerate(debug_lines):
+            text = font.render(line, True, (255, 255, 255))
+            screen.blit(text, (10, 10 + index * 30))
         pygame.display.flip()
         clock.tick(60)
 
