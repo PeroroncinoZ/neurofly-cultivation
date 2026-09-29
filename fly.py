@@ -5,6 +5,7 @@ class Fly:
     def __init__(self, x, y):
         self.x = x
         self.y = y
+        self.qi = 0
         self.speed = 5
         self.radius = 10
         self.color = (255, 255, 255)
