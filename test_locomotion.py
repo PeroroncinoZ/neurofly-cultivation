@@ -32,11 +32,27 @@ class LocomotionTests(unittest.TestCase):
         self.assertLess(fly.x, 790)
 
     def test_dna02_sign_gain_and_limit(self):
-        decoder = MotorDecoder()
-        self.assertAlmostEqual(decoder.decode(0.2, 0.3), 0.8)
-        self.assertAlmostEqual(decoder.decode(0.3, 0.2), -0.8)
-        self.assertEqual(decoder.decode(0, 1), 3)
-        self.assertEqual(decoder.decode(1, 0), -3)
+        for difference, expected in [(0.003, 0.9), (-0.003, -0.9),
+                                     (0.01, 3), (-0.01, -3), (1, 3)]:
+            decoder = MotorDecoder()
+            actual = decoder.decode(0, difference, 10)
+            self.assertAlmostEqual(actual, expected)
+            self.assertEqual(decoder.steering_difference, difference)
+
+    def test_neural_turn_smoothing_is_time_based_and_symmetric(self):
+        one_step, many_steps = MotorDecoder(), MotorDecoder()
+        first = one_step.decode(0, 0.01, 0.15)
+        self.assertGreater(first, 0)
+        self.assertLess(first, 3)
+        for _ in range(15):
+            many_steps.decode(0, 0.01, 0.01)
+        self.assertAlmostEqual(first, many_steps.turn_rate)
+        opposite = MotorDecoder().decode(0.01, 0, 0.15)
+        self.assertAlmostEqual(opposite, -first)
+        decaying = one_step.decode(0.5, 0.5, 0.15)
+        self.assertGreater(decaying, 0)
+        self.assertLess(decaying, first)
+        self.assertAlmostEqual(one_step.decode(0.5, 0.5, 10), 0)
 
     def test_detected_odor_immediately_follows_even_with_equal_activity(self):
         controller = Controller(rng=random.Random(0))
@@ -45,7 +61,8 @@ class LocomotionTests(unittest.TestCase):
         self.assertNotEqual(controller.turn_rate, 0)
         self.assertEqual(controller.choose_turn_rate(ODOR_THRESHOLD, 0.4, 0.4, 0.2), 0)
         self.assertEqual(controller.mode, 'NEURAL FOLLOWING')
-        self.assertAlmostEqual(controller.choose_turn_rate(1, 0.4, 0.40001, 0.3), 0.00008)
+        self.assertAlmostEqual(controller.choose_turn_rate(1, 0.4, 0.40001, 0.3),
+                               0.003 * (1 - math.exp(-0.1 / 0.15)))
         controller.choose_turn_rate(0, 0.4, 0.4, 0.4)
         self.assertEqual(controller.mode, 'SEARCHING')
 

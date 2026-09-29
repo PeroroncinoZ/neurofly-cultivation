@@ -77,8 +77,8 @@ def main():
             f"MBON32 L/R: {brain_debug['mbon32_left']:.3f} / {brain_debug['mbon32_right']:.3f}",
             f"DNa02 left: {brain_debug['dna02_left']:.4f}",
             f"DNa02 right: {brain_debug['dna02_right']:.4f}",
-            f"DNa02 difference (R - L): {brain_debug['dna02_difference']:+.4f}",
-            f"Turn rate: {turn_rate:+.3f} rad/s",
+            f"Raw DNa02 difference (R - L): {brain_debug['dna02_difference']:+.4f}",
+            f"Applied turn rate: {turn_rate:+.3f} rad/s",
             f"Forward speed: {fly.speed:.1f} px/s",
             f"Position: ({fly.x:.3f}, {fly.y:.3f})",
         ]

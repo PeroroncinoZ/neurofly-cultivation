@@ -27,7 +27,7 @@ class Controller:
         """Return radians/second; no position or odor gradient enters steering."""
         elapsed = 0.0 if self.previous_time is None else max(0.0, now - self.previous_time)
         self.previous_time = now
-        neural_turn = self.motor_decoder.decode(left_output, right_output)
+        neural_turn = self.motor_decoder.decode(left_output, right_output, elapsed)
         if odor_input >= self.odor_threshold:
             self.mode = "NEURAL FOLLOWING"
             self.search_until = 0.0
