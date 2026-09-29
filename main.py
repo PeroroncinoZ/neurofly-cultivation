@@ -3,6 +3,7 @@ import random
 
 import pygame
 
+from brain.brain_interface import BrainInterface
 from controller import Controller
 from fly import Fly
 from senses import SENSING_RANGE, sense_fruit
@@ -23,6 +24,7 @@ def spawn_fruit(width, height):
 
 
 def main():
+    brain = BrainInterface()
     pygame.init()
     screen = pygame.display.set_mode((800, 600))
     pygame.display.set_caption("NeuroFly: Cultivation")
@@ -42,8 +44,13 @@ def main():
             break
 
         senses = sense_fruit(fly, fruit)
+        brain.update(senses["odor_intensity"])
+        brain_debug = brain.get_debug_values()
         now = pygame.time.get_ticks() / 1000.0
-        direction_x, direction_y = controller.choose_movement(senses, now)
+        direction_x, direction_y = controller.choose_movement(
+            brain_debug["odor_input"], brain_debug["left_output"],
+            brain_debug["right_output"], now,
+        )
         fly.move(direction_x, direction_y)
         fly.keep_inside(screen.get_width(), screen.get_height())
 
@@ -56,7 +63,7 @@ def main():
         screen.fill((30, 30, 30))
         fruit.draw(screen)
         fly.draw(screen)
-        # Show the same noisy readings the controller used this frame.
+        # Sensory gradients are displayed only; movement uses neural outputs.
         debug_lines = [
             f"Qi: {fly.qi}",
             f"Mode: {controller.mode}",
@@ -64,6 +71,16 @@ def main():
             f"Right - left: {senses['horizontal']:+.3f}",
             f"Below - above: {senses['vertical']:+.3f}",
             f"Sensing range: {SENSING_RANGE} px",
+            "Simplified neural steering:",
+            f"Odor input: {brain_debug['odor_input']:.3f}",
+            f"ORN_DM1 mean: {brain_debug['orn_dm1_average']:.3f}",
+            f"DM1_lPN left: {brain_debug['dm1_lpn_left']:.3f}",
+            f"DM1_lPN right: {brain_debug['dm1_lpn_right']:.3f}",
+            f"Lateral horn mean: {brain_debug['lateral_horn_average']:.3f}",
+            f"Left output: {brain_debug['left_output']:.3f}",
+            f"Right output: {brain_debug['right_output']:.3f}",
+            f"Steering (R - L): {brain_debug['right_output'] - brain_debug['left_output']:+.4f}",
+            f"Movement (x, y): ({direction_x:+.3f}, {direction_y:+.3f})",
         ]
         for index, line in enumerate(debug_lines):
             text = font.render(line, True, (255, 255, 255))

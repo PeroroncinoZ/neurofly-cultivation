@@ -1,7 +1,7 @@
 import random
 
+from brain.motor_decoder import MotorDecoder
 
-SIGNAL_THRESHOLD = 0.01
 ODOR_THRESHOLD = 0.03
 SEARCH_MIN_SECONDS = 0.5
 SEARCH_MAX_SECONDS = 1.5
@@ -12,37 +12,23 @@ SEARCH_DIRECTIONS = [
 ]
 
 
-def follow_odor(senses):
-    """Follow stronger odor, ignoring very small sensory differences."""
-    direction_x = 0
-    direction_y = 0
-
-    if senses["horizontal"] > SIGNAL_THRESHOLD:
-        direction_x = 1
-    elif senses["horizontal"] < -SIGNAL_THRESHOLD:
-        direction_x = -1
-
-    if senses["vertical"] > SIGNAL_THRESHOLD:
-        direction_y = 1
-    elif senses["vertical"] < -SIGNAL_THRESHOLD:
-        direction_y = -1
-
-    return direction_x, direction_y
-
-
 class Controller:
     def __init__(self):
         self.mode = "SEARCHING"
         self.search_direction = (0, 0)
         self.search_until = 0.0
+        self.motor_decoder = MotorDecoder()
+        self.previous_time = None
 
-    def choose_movement(self, senses, now):
-        """Choose movement using sensory readings and time in seconds."""
-        if senses["odor_intensity"] > ODOR_THRESHOLD:
-            self.mode = "FOLLOWING ODOR"
+    def choose_movement(self, odor_input, left_output, right_output, now):
+        """Select search or neural steering without receiving fruit direction."""
+        elapsed = 1.0 / 60 if self.previous_time is None else now - self.previous_time
+        self.previous_time = now
+        if odor_input > ODOR_THRESHOLD:
+            self.mode = "NEURAL FOLLOWING"
             # Start a fresh search if the scent is lost again.
             self.search_until = 0.0
-            return follow_odor(senses)
+            return self.motor_decoder.decode(left_output, right_output, elapsed)
 
         self.mode = "SEARCHING"
         if now >= self.search_until:
@@ -51,4 +37,5 @@ class Controller:
                 SEARCH_MIN_SECONDS, SEARCH_MAX_SECONDS
             )
 
+        self.motor_decoder.set_search_direction(self.search_direction)
         return self.search_direction
