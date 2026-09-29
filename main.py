@@ -3,6 +3,7 @@ import random
 
 import pygame
 
+from controller import choose_movement
 from fly import Fly
 from senses import sense_fruit
 from spiritual_fruit import SpiritualFruit
@@ -39,8 +40,9 @@ def main():
         if not running:
             break
 
-        keys = pygame.key.get_pressed()
-        fly.move(keys)
+        senses = sense_fruit(fly, fruit)
+        direction_x, direction_y = choose_movement(senses)
+        fly.move(direction_x, direction_y)
 
         if circles_touch(fly, fruit):
             fly.qi += 1

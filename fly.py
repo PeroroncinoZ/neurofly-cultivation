@@ -10,16 +10,10 @@ class Fly:
         self.radius = 10
         self.color = (255, 255, 255)
 
-    def move(self, keys):
-        # Move while an arrow key is held down.
-        if keys[pygame.K_UP]:
-            self.y -= self.speed
-        if keys[pygame.K_DOWN]:
-            self.y += self.speed
-        if keys[pygame.K_LEFT]:
-            self.x -= self.speed
-        if keys[pygame.K_RIGHT]:
-            self.x += self.speed
+    def move(self, direction_x, direction_y):
+        # The controller chooses directions; the body applies its speed.
+        self.x += direction_x * self.speed
+        self.y += direction_y * self.speed
 
     def draw(self, screen):
         pygame.draw.circle(screen, self.color, (self.x, self.y), self.radius)
