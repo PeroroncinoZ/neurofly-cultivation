@@ -3,7 +3,7 @@ import random
 
 import pygame
 
-from controller import choose_movement
+from controller import Controller
 from fly import Fly
 from senses import SENSING_RANGE, sense_fruit
 from spiritual_fruit import SpiritualFruit
@@ -29,6 +29,7 @@ def main():
     clock = pygame.time.Clock()
     font = pygame.font.Font(None, 32)
     fly = Fly(400, 300)
+    controller = Controller()
     fruit = SpiritualFruit(600, 200)
 
     running = True
@@ -41,8 +42,10 @@ def main():
             break
 
         senses = sense_fruit(fly, fruit)
-        direction_x, direction_y = choose_movement(senses)
+        now = pygame.time.get_ticks() / 1000.0
+        direction_x, direction_y = controller.choose_movement(senses, now)
         fly.move(direction_x, direction_y)
+        fly.keep_inside(screen.get_width(), screen.get_height())
 
         if circles_touch(fly, fruit):
             fly.qi += 1
@@ -56,6 +59,7 @@ def main():
         # Show the same noisy readings the controller used this frame.
         debug_lines = [
             f"Qi: {fly.qi}",
+            f"Mode: {controller.mode}",
             f"Odor intensity: {senses['odor_intensity']:.3f}",
             f"Right - left: {senses['horizontal']:+.3f}",
             f"Below - above: {senses['vertical']:+.3f}",

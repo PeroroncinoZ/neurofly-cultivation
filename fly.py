@@ -15,5 +15,10 @@ class Fly:
         self.x += direction_x * self.speed
         self.y += direction_y * self.speed
 
+    def keep_inside(self, width, height):
+        # Leave enough room for the entire circle at each edge.
+        self.x = max(self.radius, min(self.x, width - self.radius))
+        self.y = max(self.radius, min(self.y, height - self.radius))
+
     def draw(self, screen):
         pygame.draw.circle(screen, self.color, (self.x, self.y), self.radius)
