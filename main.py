@@ -5,6 +5,7 @@ import pygame
 
 from brain.brain_interface import BrainInterface
 from controller import Controller
+from cultivation import Cultivation
 from boundary import BoundaryAvoidance
 from collision import movement_touches_fruit
 from fly import Fly
@@ -31,6 +32,7 @@ def main(visualize_3d=False, skeleton_dir=None):
     font = pygame.font.Font(None, 26)
     fly = Fly(400, 300)
     controller = Controller()
+    cultivation = Cultivation()
     boundary = BoundaryAvoidance()
     fruit = SpiritualFruit(600, 200)
 
@@ -74,12 +76,14 @@ def main(visualize_3d=False, skeleton_dir=None):
                 # Replacing the old fruit removes it from the world.
                 fruit = spawn_fruit(screen.get_width(), screen.get_height())
 
+            cultivation.update(fly.qi)
+
             # Clear the previous frame before drawing the fruit and fly again.
             screen.fill((30, 30, 30))
             fruit.draw(screen)
             fly.draw(screen)
             debug_lines = [
-                f"Qi: {fly.qi}",
+                *cultivation.display_lines(),
                 f"Mode: {controller.mode}",
                 f"Alignment threshold: {controller.alignment_threshold:.4f}",
                 f"Total odor: {controller.total_odor:.3f}",
