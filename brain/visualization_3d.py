@@ -145,7 +145,7 @@ class NeuralVisualizer:
         self.snapshots.close()
 
 
-def _viewer(directory, selected, snapshots, stop):
+def _viewer(directory, selected, snapshots, stop, offscreen=None):
     import pygame
     skeletons, errors = load_skeletons(directory, selected)
     context_mesh, context_status = load_context(Path(directory) / "context")
@@ -166,10 +166,14 @@ def _viewer(directory, selected, snapshots, stop):
     context_points = ([] if context_mesh is None else
                       [tuple((p[i] - midpoint[i]) / extent for i in range(3))
                        for p in context_mesh['vertices']])
-    pygame.display.init()
     pygame.font.init()
-    screen = pygame.display.set_mode((1100, 750), pygame.RESIZABLE)
-    pygame.display.set_caption('NeuroFly — read-only FlyWire skeletons')
+    if offscreen is None:
+        pygame.display.init()
+        screen = pygame.display.set_mode((1100, 750), pygame.RESIZABLE)
+        pygame.display.set_caption('NeuroFly — read-only FlyWire skeletons')
+    else:
+        size, pixels, frame_lock, frame_ready = offscreen
+        screen = pygame.Surface(size, depth=32)
     font = pygame.font.Font(None, 22)
     clock = pygame.time.Clock()
     yaw, pitch, zoom = 0.0, 0.0, 1.0
@@ -177,7 +181,7 @@ def _viewer(directory, selected, snapshots, stop):
     show_context, show_labels = True, True
     try:
         while not stop.is_set():
-            for event in pygame.event.get():
+            for event in (pygame.event.get() if offscreen is None else []):
                 if event.type == pygame.QUIT:
                     return
                 if event.type == pygame.MOUSEMOTION and event.buttons[0]:
@@ -192,7 +196,12 @@ def _viewer(directory, selected, snapshots, stop):
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_l:
                     show_labels = not show_labels
             try:
-                activities = snapshots.get_nowait()
+                packet = snapshots.get_nowait()
+                if offscreen is None:
+                    activities = packet
+                else:
+                    activities, camera = packet
+                    yaw, pitch, zoom, show_context, show_labels = camera
             except queue.Empty:
                 pass
             screen.fill((15, 18, 25))
@@ -219,17 +228,27 @@ def _viewer(directory, selected, snapshots, stop):
                           f"loaded ({len(skeletons[rid]['warnings'])} warnings)")
                 activity_label = f'{value:.3f}' if rid in activities else 'no live sample'
                 text = f'{label}: {activity_label} — {status}'
-                if show_labels:
+                if show_labels and offscreen is None:
                     screen.blit(font.render(text, True, COLORS[index % len(COLORS)]), (12, 45 + index * 23))
-            screen.blit(font.render('Drag: rotate | Wheel: zoom | R: reset | B: context | L: labels | Close: simulation continues',
-                                    True, (240, 240, 240)), (12, 12))
-            context_label = context_status if show_context else 'Brain context hidden (B)'
-            screen.blit(font.render(context_label, True, (150, 150, 150)), (12, height - 65))
-            if not skeletons:
-                screen.blit(font.render('No morphology loaded. See brain/visualization_3d.md; no coordinates invented.',
-                                        True, (240, 200, 130)), (12, height - 40))
-            pygame.display.flip()
-            clock.tick(30)
+            if offscreen is None:
+                screen.blit(font.render('Drag: rotate | Wheel: zoom | R: reset | B: context | L: labels',
+                                        True, (240, 240, 240)), (12, 12))
+                context_label = context_status if show_context else 'Brain context hidden (B)'
+                screen.blit(font.render(context_label, True, (150, 150, 150)), (12, height - 65))
+                if not skeletons:
+                    screen.blit(font.render('No morphology loaded. See brain/visualization_3d.md; no coordinates invented.',
+                                            True, (240, 200, 130)), (12, height - 40))
+            if offscreen is None:
+                pygame.display.flip()
+            else:
+                frame = pygame.image.tobytes(screen, 'RGB')
+                if frame_lock.acquire(False):
+                    try:
+                        memoryview(pixels).cast('B')[:] = frame
+                        frame_ready.set()
+                    finally:
+                        frame_lock.release()
+            clock.tick(25)
     finally:
         pygame.quit()
 

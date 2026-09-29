@@ -6,8 +6,10 @@ The old JSON loader is removed. Each filename is `<FlyWire_root_id>.swc`;
 Add mapping entries and corresponding SWC exports to extend the selection.
 
 ```sh
-# Live activity, separate viewer process:
-.venv/bin/python main.py --visualize-3d
+# Combined simulation and live brain panel (default):
+.venv/bin/python main.py
+# Simulation with disabled brain rendering:
+.venv/bin/python main.py --no-brain
 # Validate files and print per-neuron node/segment/skipped-row counts:
 .venv/bin/python -m brain.visualization_3d --validate
 # Standalone morphology inspection, no simulated activation:
@@ -15,8 +17,9 @@ Add mapping entries and corresponding SWC exports to extend the selection.
 # Override the directory with --skeleton-dir /path/to/swc in either command.
 ```
 
-Left mouse drag rotates; mouse wheel zooms; R resets. Closing the viewer does not
-stop the simulation. Activation changes line brightness and width. Colors and
+With the cursor over the brain panel, left mouse drag rotates, the mouse wheel
+zooms, and R resets. B toggles context and L toggles labels. In standalone mode,
+closing the viewer does not stop another simulation. Activation changes line brightness and width. Colors and
 legend labels identify neuron type and side. No missing morphology is invented.
 
 ## SWC interpretation
@@ -44,15 +47,39 @@ loading. The legend displays warning counts. `validate_morphology()` returns all
 warnings as well as printing a bounded report. Filename selection supplies neuron
 identity; the loader cannot authenticate the export's biological identity.
 
-## Isolation and performance
+## Embedded rendering architecture
 
-Only copied activation scalars cross a bounded, nonblocking queue into the spawned
-viewer process (up to 20 Hz). No graph/state reference or control channel is given
-to the viewer. All morphology file access is read-only. Pygame software rendering
-uses orthographic 3D projection; it has no mesh/depth occlusion or atlas overlay.
-The current exports contain roughly one million nodes, so viewer frame rate may
-be substantially below its 30 Hz cap. All segments are retained. The simulation
-never waits for rendering or activation delivery. No neural behavior is modified.
+The main Pygame window is 1648×960: an unchanged 800×600 arena on the left,
+an 800×600 brain panel on the right, with padded section headers, a compact
+neuron legend, and a status bar below. Presentation mode is the default. Press
+D to toggle grouped detailed metrics, or P to return to presentation mode.
+`ui.py` owns layout and read-only text; embedded rendering omits its standalone
+text overlays so scenes stay unobstructed. The standalone viewer keeps its labels.
+Arena collision, spawning and wall avoidance still receive 800×600 dimensions.
+
+`brain/embedded_viewer.py` starts a spawned off-screen rendering worker. The worker
+loads the real SWCs/context and draws on a regular Pygame Surface, without calling
+`display.set_mode` or opening a native window. It uses the same rendering code
+as the standalone viewer. All segments and activation styling are retained.
+
+The main loop sends copied activation scalars and absolute camera/toggle settings
+through a bounded nonblocking queue at up to 25 Hz. Completed RGB frames cross a
+shared-memory buffer. A nonblocking lock protects the buffer; the main loop skips
+busy frames, converts completed bytes to a Pygame surface, and retains the last
+frame while the renderer works. No graph or mutable neural state is shared. Camera
+commands affect only presentation, never simulation. Shutdown joins/terminates
+only the renderer owned by this application.
+
+The worker targets 25 FPS, but roughly one million skeleton nodes plus the context
+mesh can render much slower with software drawing. No 20–30 FPS guarantee is made
+for these exports. Rendering and morphology loading never run in the simulation
+loop; pixel copying/blitting still has a small main-thread cost and both processes
+share machine resources. No synchronous render waits are introduced.
+
+Startup failure, renderer exit, or worker rendering errors show an unavailable
+message while simulation continues. `--no-brain` disables the worker entirely.
+`--visualize-3d` remains a compatibility alias for the default embedded panel.
+The standalone command remains `python -m brain.visualization_3d`.
 
 ## Optional anatomical context
 

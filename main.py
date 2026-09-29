@@ -6,15 +6,17 @@ import pygame
 from brain.brain_interface import BrainInterface
 from controller import Controller
 from cultivation import Cultivation
+from ui import SimulatorUI, WINDOW_SIZE, ARENA_SIZE, WORLD_RECT, BRAIN_RECT
 from boundary import BoundaryAvoidance
 from collision import movement_touches_fruit
 from fly import Fly
 from senses import sense_fruit
-from spiritual_fruit import SpiritualFruit, SPAWN_MARGIN
+from spiritual_fruit import (SpiritualFruit, SPAWN_MARGIN, create_random_fruit,
+                             CONSUMPTION_MESSAGE_SECONDS)
 
 
 def spawn_fruit(width, height, margin=SPAWN_MARGIN):
-    fruit = SpiritualFruit(0, 0)
+    fruit = create_random_fruit(0, 0)
     inset = math.ceil(max(fruit.radius, margin))
     if width < 2 * inset or height < 2 * inset:
         raise ValueError("window is too small for the fruit spawn margin")
@@ -23,13 +25,16 @@ def spawn_fruit(width, height, margin=SPAWN_MARGIN):
     return fruit
 
 
-def main(visualize_3d=False, skeleton_dir=None):
+def main(visualize_3d=True, skeleton_dir=None):
     brain = BrainInterface()
     pygame.init()
-    screen = pygame.display.set_mode((800, 600))
+    arena_size = ARENA_SIZE
+    screen = pygame.display.set_mode(WINDOW_SIZE)
+    arena = screen.subsurface(WORLD_RECT)
+    brain_panel = BRAIN_RECT
     pygame.display.set_caption("NeuroFly: Cultivation")
     clock = pygame.time.Clock()
-    font = pygame.font.Font(None, 26)
+    ui = SimulatorUI()
     fly = Fly(400, 300)
     controller = Controller()
     cultivation = Cultivation()
@@ -37,10 +42,19 @@ def main(visualize_3d=False, skeleton_dir=None):
     fruit = SpiritualFruit(600, 200)
 
     visualizer = None
+    viewer_status = 'Brain panel disabled (--no-brain).'
     if visualize_3d:
-        from brain.visualization_3d import NeuralVisualizer, SKELETON_DIR
-        visualizer = NeuralVisualizer(SKELETON_DIR if skeleton_dir is None else skeleton_dir)
+        try:
+            from brain.embedded_viewer import EmbeddedBrainViewer
+            from brain.visualization_3d import SKELETON_DIR
+            visualizer = EmbeddedBrainViewer(brain_panel.size,
+                SKELETON_DIR if skeleton_dir is None else skeleton_dir)
+        except Exception as exc:
+            viewer_status = f'Brain renderer unavailable: {exc}'
+            print(viewer_status, flush=True)
 
+    consumption_message = ""
+    message_until = 0.0
     simulation_time = 0.0
     running = True
     try:
@@ -48,6 +62,9 @@ def main(visualize_3d=False, skeleton_dir=None):
             elapsed = clock.tick(60) / 1000.0
             simulation_time += elapsed
             for event in pygame.event.get():
+                ui.handle_event(event)
+                if visualizer is not None:
+                    visualizer.handle_event(event, brain_panel, pygame.mouse.get_pos())
                 if event.type == pygame.QUIT:
                     running = False
 
@@ -63,51 +80,37 @@ def main(visualize_3d=False, skeleton_dir=None):
                 brain_debug["odor_input"], brain_debug["dna02_left"],
                 brain_debug["dna02_right"], simulation_time,
             )
-            turn_rate = boundary.apply(fly, screen.get_width(), screen.get_height(),
+            turn_rate = boundary.apply(fly, *arena_size,
                                        turn_rate, elapsed, controller.total_odor,
                                        fly.speed * controller.speed_scale)
             start = (fly.x, fly.y)
             fly.move(turn_rate, elapsed, controller.speed_scale * boundary.speed_scale)
-            fly.keep_inside(screen.get_width(), screen.get_height())
+            fly.keep_inside(*arena_size)
             captured = movement_touches_fruit(start, (fly.x, fly.y), fly.radius, fruit)
 
             if captured:
-                fly.qi += 1
+                fly.qi += fruit.qi_value
+                consumption_message = fruit.consumption_message()
+                message_until = simulation_time + CONSUMPTION_MESSAGE_SECONDS
                 # Replacing the old fruit removes it from the world.
-                fruit = spawn_fruit(screen.get_width(), screen.get_height())
+                fruit = spawn_fruit(*arena_size)
 
             cultivation.update(fly.qi)
 
             # Clear the previous frame before drawing the fruit and fly again.
-            screen.fill((30, 30, 30))
-            fruit.draw(screen)
-            fly.draw(screen)
-            debug_lines = [
-                *cultivation.display_lines(),
-                f"Mode: {controller.mode}",
-                f"Alignment threshold: {controller.alignment_threshold:.4f}",
-                f"Total odor: {controller.total_odor:.3f}",
-                f"Smoothed odor change: {controller.smoothed_odor_change:+.3f}/s",
-                f"Boundary avoidance: {boundary.active}",
-                f"Heading: {math.degrees(fly.heading):.1f} deg",
-                f"Left odor input: {brain_debug['left_odor_input']:.3f}",
-                f"Right odor input: {brain_debug['right_odor_input']:.3f}",
-                f"ORN mean L/R: {brain_debug['left_orn_average']:.3f} / {brain_debug['right_orn_average']:.3f}",
-                f"DM1_lPN L/R: {brain_debug['dm1_lpn_left']:.3f} / {brain_debug['dm1_lpn_right']:.3f}",
-                f"APL L/R: {brain_debug['apl_left']:.3f} / {brain_debug['apl_right']:.3f}",
-                f"MBON32 L/R: {brain_debug['mbon32_left']:.3f} / {brain_debug['mbon32_right']:.3f}",
-                f"DNa02 left: {brain_debug['dna02_left']:.4f}",
-                f"DNa02 right: {brain_debug['dna02_right']:.4f}",
-                f"Raw DNa02 difference (L - R): {controller.motor_decoder.steering_difference:+.4f}",
-                f"Smoothed DNa02 difference (L - R): {controller.motor_decoder.smoothed_difference:+.5f}",
-                f"Applied steering gain: {controller.motor_decoder.applied_gain:.1f}",
-                f"Applied turn rate: {turn_rate:+.3f} rad/s",
-                f"Applied forward speed: {fly.applied_speed:.1f} px/s",
-                f"Position: ({fly.x:.3f}, {fly.y:.3f})",
-            ]
-            for index, line in enumerate(debug_lines):
-                text = font.render(line, True, (255, 255, 255))
-                screen.blit(text, (10, 10 + index * 24))
+            ui.begin(screen)
+            fruit.draw(arena)
+            fly.draw(arena)
+            pygame.draw.rect(screen, (15, 18, 25), brain_panel)
+            if visualizer is not None:
+                frame = visualizer.poll()
+                if frame is not None:
+                    screen.blit(frame, brain_panel.topleft)
+                viewer_status = visualizer.status
+            ui.draw(screen, cultivation, controller, fly, boundary, brain_debug, turn_rate,
+                    viewer_status=viewer_status,
+                    show_labels=visualizer.camera[4] if visualizer is not None else True,
+                    message=consumption_message if simulation_time < message_until else '')
             pygame.display.flip()
 
     finally:
@@ -119,7 +122,8 @@ def main(visualize_3d=False, skeleton_dir=None):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--visualize-3d', action='store_true')
+    parser.add_argument('--visualize-3d', action='store_true', help='Legacy alias; brain panel is enabled by default')
+    parser.add_argument('--no-brain', action='store_true', help='Disable the embedded renderer')
     parser.add_argument('--skeleton-dir', default=None)
     args = parser.parse_args()
-    main(visualize_3d=args.visualize_3d, skeleton_dir=args.skeleton_dir)
+    main(visualize_3d=not args.no_brain, skeleton_dir=args.skeleton_dir)
