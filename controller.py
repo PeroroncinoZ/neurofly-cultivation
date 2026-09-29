@@ -1,16 +1,19 @@
+SIGNAL_THRESHOLD = 0.01
+
+
 def choose_movement(senses):
-    """Return horizontal and vertical directions: -1, 0, or 1."""
+    """Follow stronger odor, ignoring very small sensory differences."""
     direction_x = 0
     direction_y = 0
 
-    if senses["dx"] > 0:
+    if senses["horizontal"] > SIGNAL_THRESHOLD:
         direction_x = 1
-    elif senses["dx"] < 0:
+    elif senses["horizontal"] < -SIGNAL_THRESHOLD:
         direction_x = -1
 
-    if senses["dy"] > 0:
+    if senses["vertical"] > SIGNAL_THRESHOLD:
         direction_y = 1
-    elif senses["dy"] < 0:
+    elif senses["vertical"] < -SIGNAL_THRESHOLD:
         direction_y = -1
 
     return direction_x, direction_y

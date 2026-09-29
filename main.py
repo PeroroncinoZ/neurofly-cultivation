@@ -5,7 +5,7 @@ import pygame
 
 from controller import choose_movement
 from fly import Fly
-from senses import sense_fruit
+from senses import SENSING_RANGE, sense_fruit
 from spiritual_fruit import SpiritualFruit
 
 
@@ -49,18 +49,17 @@ def main():
             # Replacing the old fruit removes it from the world.
             fruit = spawn_fruit(screen.get_width(), screen.get_height())
 
-        # Sense after collection so the values describe the current fruit.
-        senses = sense_fruit(fly, fruit)
-
         # Clear the previous frame before drawing the fruit and fly again.
         screen.fill((30, 30, 30))
         fruit.draw(screen)
         fly.draw(screen)
+        # Show the same noisy readings the controller used this frame.
         debug_lines = [
             f"Qi: {fly.qi}",
-            f"Fruit dx: {senses['dx']:.1f} px",
-            f"Fruit dy: {senses['dy']:.1f} px",
-            f"Fruit distance: {senses['distance']:.1f} px",
+            f"Odor intensity: {senses['odor_intensity']:.3f}",
+            f"Right - left: {senses['horizontal']:+.3f}",
+            f"Below - above: {senses['vertical']:+.3f}",
+            f"Sensing range: {SENSING_RANGE} px",
         ]
         for index, line in enumerate(debug_lines):
             text = font.render(line, True, (255, 255, 255))
